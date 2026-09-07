@@ -1,0 +1,31 @@
+Order Date,Ship Date,Ship Mode,Customer ID,Customer Name,Segment,Country,City,State,Region,Product ID,Category,Sub-Category,Product Name,Sales,Quantity,Discount,Profit
+2024-01-03,2024-01-07,Second Class,CG-12520,Claire Gute,Consumer,United States,Henderson,Kentucky,South,FUR-BO-10001798,Furniture,Bookcases,Bush Somerset Collection Bookcase,261.96,2,0.0,41.91
+2024-01-03,2024-01-07,Second Class,CG-12520,Claire Gute,Consumer,United States,Henderson,Kentucky,South,FUR-CH-10000454,Furniture,Chairs,Hon Deluxe Fabric Upholstered Stacking Chairs,731.94,3,0.0,219.58
+2024-01-09,2024-01-13,Second Class,DV-13045,Darrin Van Huff,Corporate,United States,Los Angeles,California,West,OFF-LA-10000240,Office Supplies,Labels,Self-Adhesive Address Labels for Typewriters,14.62,2,0.0,6.87
+2024-01-10,2024-01-18,Standard Class,SO-20335,Sean O'Donnell,Consumer,United States,Fort Lauderdale,Florida,South,FUR-TA-10000577,Furniture,Tables,Bretford CR4500 Series Slim Rectangular Table,957.58,5,0.45,-383.03
+2024-01-14,2024-01-20,Standard Class,SO-20335,Sean O'Donnell,Consumer,United States,Fort Lauderdale,Florida,South,OFF-ST-10000760,Office Supplies,Storage,Eldon Fold N Roll Cart System,22.37,2,0.2,2.52
+2024-01-15,2024-01-20,Second Class,BH-11710,Brosina Hoffman,Consumer,United States,Los Angeles,California,West,FUR-FU-10001487,Furniture,Furnishings,Eldon Expressions Wood and Plastic Desk Accessories,48.86,7,0.0,14.17
+2024-01-15,2024-01-20,Second Class,BH-11710,Brosina Hoffman,Consumer,United States,Los Angeles,California,West,OFF-AR-10002833,Office Supplies,Art,Newell 322,7.28,4,0.0,1.97
+2024-01-15,2024-01-20,Second Class,BH-11710,Brosina Hoffman,Consumer,United States,Los Angeles,California,West,TEC-PH-10002275,Technology,Phones,Mitel 5320 IP Phone VoIP phone,907.15,6,0.2,90.72
+2024-01-18,2024-01-25,Standard Class,AA-10480,Andrew Allen,Consumer,United States,Concord,North Carolina,South,OFF-BI-10003910,Office Supplies,Binders,DXL Angle-View Binders with Locking Rings,18.50,3,0.2,5.78
+2024-01-20,2024-01-25,First Class,IM-15070,Irene Maddox,Consumer,United States,Seattle,Washington,West,OFF-PA-10002365,Office Supplies,Paper,Xerox 1967,15.55,3,0.2,5.44
+2024-01-22,2024-01-27,Standard Class,HP-14815,Harold Pawlan,Home Office,United States,Fort Worth,Texas,Central,TEC-PH-10004664,Technology,Phones,Cisco SPA 501G IP Phone,911.42,4,0.2,68.36
+2024-01-25,2024-01-30,Standard Class,PK-19075,Pete Kriz,Consumer,United States,Madison,Wisconsin,Central,OFF-BI-10004632,Office Supplies,Binders,Ibico EPK-21 Electric Binding System,407.98,3,0.2,132.59
+2024-02-01,2024-02-06,First Class,RB-19360,Rick Baxter,Consumer,United States,Philadelphia,Pennsylvania,East,FUR-CH-10002774,Furniture,Chairs,Global Deluxe Stacking Chair,516.84,2,0.0,155.05
+2024-02-03,2024-02-08,Standard Class,AB-10105,Adrian Barton,Consumer,United States,New York City,New York,East,TEC-AC-10003832,Technology,Accessories,Plantronics CS510 - Over-the-Head monaural Wireless Headset System,209.30,3,0.2,56.51
+2024-02-05,2024-02-10,Second Class,GM-14440,Grant Merrill,Corporate,United States,Dallas,Texas,Central,OFF-SU-10001649,Office Supplies,Supplies,Acme Trimmer,14.17,2,0.0,4.96
+2024-02-08,2024-02-13,Standard Class,KL-16555,Ken Lonsdale,Corporate,United States,San Francisco,California,West,TEC-CO-10004235,Technology,Copiers,Canon imageCLASS 2200 Advanced Copier,2999.95,5,0.0,1199.98
+2024-02-10,2024-02-15,Second Class,SC-20095,Sanjit Chand,Consumer,United States,Jacksonville,Florida,South,OFF-EN-10001509,Office Supplies,Envelopes,Staple envelope,29.47,3,0.2,9.65
+2024-02-12,2024-02-18,Standard Class,TB-21400,Tracy Blumstein,Consumer,United States,Columbus,Ohio,East,OFF-PA-10001970,Office Supplies,Paper,Southworth 25% Cotton Antique Laid Paper,19.46,3,0.0,9.34
+2024-02-15,2024-02-20,First Class,AA-10315,Alex Avila,Consumer,United States,Houston,Texas,Central,FUR-TA-10001539,Furniture,Tables,Chromcraft Rectangular Conference Tables,1706.18,9,0.2,85.31
+2024-02-18,2024-02-22,Second Class,JL-15835,Julia Leigh,Consumer,United States,Chicago,Illinois,Central,TEC-PH-10004977,Technology,Phones,Cisco SPA525G2 5-Line IP Phone,213.48,3,0.2,16.01
+2024-02-20,2024-02-25,Standard Class,MS-17845,Maria Suri,Home Office,United States,Phoenix,Arizona,West,OFF-ST-10004186,Office Supplies,Storage,Ultra Commercial Grade Dual Valve Foot Pump,55.98,2,0.0,16.24
+2024-02-22,2024-02-28,Standard Class,DW-13510,Dorothy Wardle,Consumer,United States,Denver,Colorado,West,FUR-FU-10004091,Furniture,Furnishings,Master Caster Door Stop,22.72,7,0.0,7.38
+2024-03-01,2024-03-05,Second Class,PO-19195,Patrick O'Brill,Consumer,United States,Nashville,Tennessee,South,TEC-AC-10001998,Technology,Accessories,Logitech MK550 Wireless Wave Keyboard and Mouse Combo,83.96,2,0.0,30.23
+2024-03-03,2024-03-08,Standard Class,BS-11365,Brian Stead,Consumer,United States,San Diego,California,West,OFF-BI-10002309,Office Supplies,Binders,Wilson Jones Hanging View Binder,18.56,2,0.2,6.50
+2024-03-05,2024-03-10,First Class,EH-13945,Emily Haney,Corporate,United States,Boston,Massachusetts,East,FUR-CH-10003061,Furniture,Chairs,Novimex Executive Leather Armchair,1000.00,2,0.0,300.00
+2024-03-08,2024-03-12,Second Class,KM-16375,Kelly Morris,Consumer,United States,Portland,Oregon,West,TEC-PH-10002033,Technology,Phones,Samsung Galaxy S23,799.99,1,0.0,239.99
+2024-03-10,2024-03-15,Standard Class,RS-19765,Ray Saunders,Home Office,United States,Atlanta,Georgia,South,OFF-AP-10002892,Office Supplies,Appliances,Hamilton Beach Toaster,39.99,1,0.15,8.00
+2024-03-12,2024-03-18,Standard Class,NP-18385,Neil Palmer,Consumer,United States,Minneapolis,Minnesota,Central,FUR-BO-10003978,Furniture,Bookcases,Sauder Classic Bookcase,329.99,3,0.0,98.99
+2024-03-15,2024-03-20,First Class,CM-12385,Christopher Martinez,Corporate,United States,Miami,Florida,South,TEC-CO-10002648,Technology,Copiers,Brother Printer MFC-J995DW,399.99,2,0.1,119.99
+2024-03-18,2024-03-22,Second Class,LH-16855,Laura Hernandez,Consumer,United States,Austin,Texas,Central,OFF-PA-10003344,Office Supplies,Paper,HP Office Recycled Paper,24.99,5,0.0,12.49
