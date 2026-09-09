@@ -90,4 +90,29 @@ export async function runSegmentation(id, maxClusters = 8) {
   return res.data;
 }
 
+// Products
+export async function getProductProfitability(id) {
+  const res = await api.get(`/products/${id}/profitability`);
+  return res.data;
+}
+
+// Diagnosis
+export async function getDiagnosis(id, metric) {
+  const params = {};
+  if (metric) params.metric = metric;
+  const res = await api.get(`/diagnosis/${id}`, { params });
+  return res.data;
+}
+
+// Simulator
+export async function runWhatIf(id, adjustments) {
+  const res = await api.post(`/simulator/${id}/what-if`, adjustments);
+  return res.data;
+}
+
+export async function getExplanation(id) {
+  const res = await api.get(`/simulator/${id}/explain`);
+  return res.data;
+}
+
 export default api;
