@@ -1,21 +1,74 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
   Area,
+  Line,
   ComposedChart,
 } from 'recharts';
-import { Play, Trophy } from 'lucide-react';
+import { AlertCircle, Play, Trophy } from 'lucide-react';
 import PageHeader from '../components/Shared/PageHeader';
 import DatasetSelector from '../components/Shared/DatasetSelector';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
+import Panel from '../components/Shared/Panel';
+import {
+  formatCurrencyAxis,
+  formatCurrencyExact,
+  formatPercent,
+  SERIES,
+  CHART_INK,
+} from '../lib/format';
 import { runForecast } from '../api/client';
+import { chartAnim } from '../lib/motion';
+
+// History and forecast are the same measure on the same axis, so they are told
+// apart by stroke, not by scale: history is solid, the projection is dashed and
+// carries the range band behind it.
+const HISTORY_COLOR = SERIES[0];
+const FORECAST_COLOR = SERIES[1];
+
+const PERIODS = {
+  daily: { label: 'Daily', grouped: 'by day', units: 'days' },
+  weekly: { label: 'Weekly', grouped: 'by week', units: 'weeks' },
+  monthly: { label: 'Monthly', grouped: 'by month', units: 'months' },
+};
+
+const MODEL_NAMES = { xgboost: 'XGBoost', exp_smoothing: 'Exponential smoothing' };
+
+/* Most things that stop a run are a column whose meaning was never set, so the
+   error ends at the one screen that can fix it rather than leaving a person to
+   find it. */
+const FIX_LINK =
+  'font-medium text-ink underline underline-offset-4 hover:no-underline ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
+
+/** The backend reports 0 across all three metrics when a model had no held-back
+ *  slice to score against. Printing that as "0.00" would claim a perfect fit. */
+function wasScored(model) {
+  return !(model.mae === 0 && model.rmse === 0 && model.mape === 0);
+}
+
+function toDate(value) {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatAxisDate(value, periodType) {
+  const d = toDate(value);
+  if (!d) return value;
+  if (periodType === 'monthly') return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function formatFullDate(value) {
+  const d = toDate(value);
+  if (!d) return value;
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
 export default function ForecastPage() {
   const [datasetId, setDatasetId] = useState(null);
@@ -24,6 +77,14 @@ export default function ForecastPage() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Switching datasets used to leave the previous dataset's forecast on screen,
+  // labelled as if it belonged to the newly chosen one.
+  function handleSelectDataset(id) {
+    setDatasetId(id);
+    setResult(null);
+    setError(null);
+  }
 
   async function handleRunForecast() {
     if (!datasetId) return;
@@ -34,145 +95,360 @@ export default function ForecastPage() {
       const data = await runForecast(datasetId, { periods, periodType });
       setResult(data);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Forecasting failed');
+      setError(err.response?.data?.detail || 'The server did not answer. It may not be running.');
       setResult(null);
     } finally {
       setLoading(false);
     }
   }
 
-  const chartData = result
-    ? [
-        ...result.historical.map((h) => ({ date: h.date, actual: h.value })),
-        ...result.forecast.map((f) => ({
-          date: f.date,
-          forecast: f.value,
-          lower: f.lower,
-          upper: f.upper,
-        })),
-      ]
-    : [];
-
   return (
     <div>
       <PageHeader
-        title="Sales & Demand Forecasting"
-        description="Predict future trends using XGBoost and Exponential Smoothing models."
+        title="Forecast"
+        description="Two models run against your sales history. Whichever one predicted your past more accurately is the one you get, and this page tells you which it picked and how far off it has been running."
       />
 
-      <DatasetSelector selectedId={datasetId} onSelect={setDatasetId} />
+      <DatasetSelector selectedId={datasetId} onSelect={handleSelectDataset} />
 
-      {datasetId && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
+      {datasetId ? (
+        <Panel
+          className="mb-6"
+          title="Set up the run"
+          description="Choose how to group your history and how far past the last sale to project."
+        >
           <div className="flex flex-wrap items-end gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Period Type</label>
+              <label htmlFor="forecast-period-type" className="mb-1 block text-sm font-medium text-ink/75">
+                Group history
+              </label>
               <select
+                id="forecast-period-type"
                 value={periodType}
                 onChange={(e) => setPeriodType(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                className="border border-kraft bg-sheet px-3 py-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
               >
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
+                {Object.entries(PERIODS).map(([value, { label }]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
               </select>
             </div>
+
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Periods Ahead</label>
+              <label htmlFor="forecast-periods" className="mb-1 block text-sm font-medium text-ink/75">
+                Periods ahead
+              </label>
               <input
+                id="forecast-periods"
                 type="number"
                 value={periods}
                 onChange={(e) => setPeriods(Math.max(1, Math.min(24, Number(e.target.value))))}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-20"
+                className="w-24 border border-kraft bg-sheet px-3 py-2 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
                 min={1}
                 max={24}
+                aria-describedby="forecast-periods-hint"
               />
             </div>
+
             <button
+              type="button"
               onClick={handleRunForecast}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="flex items-center gap-2 bg-ink px-4 py-2 text-sm font-medium text-paper hover:bg-ink/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:cursor-not-allowed disabled:bg-ink/70"
             >
-              <Play size={14} />
-              {loading ? 'Running...' : 'Run Forecast'}
+              <Play size={14} aria-hidden="true" />
+              {loading ? 'Running' : 'Run the forecast'}
             </button>
           </div>
-        </div>
+
+          <p id="forecast-periods-hint" className="mt-3 text-sm text-ink/70">
+            Between 1 and 24 periods ahead. The further out you look, the wider the range gets.
+          </p>
+        </Panel>
+      ) : (
+        <Panel>
+          <p className="text-ink/75">Pick a dataset above and this page will forecast it.</p>
+        </Panel>
       )}
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm mb-4">
-          {error}
+        <div
+          role="alert"
+          className="mb-6 flex items-start gap-2.5 border-l-[3px] border-warn bg-sheet py-3 pr-4 pl-3.5 text-sm text-ink"
+        >
+          <AlertCircle size={16} className="mt-0.5 shrink-0 text-warn" aria-hidden="true" />
+          <div>
+            <p className="max-w-[70ch] font-medium">The forecast stopped: {error}</p>
+            <p className="mt-1 max-w-[70ch] text-ink/75">
+              A forecast needs one column set as the date and one set as your sales figures, and at
+              least six periods of history once the file is grouped.{' '}
+              <Link to="/upload" className={FIX_LINK}>
+                Open your files
+              </Link>
+              , open this one, and set its column meanings. Grouping by month instead of by day
+              often fixes a run that is short on periods.
+            </p>
+          </div>
         </div>
       )}
 
-      {loading && <LoadingSpinner message="Training models and generating forecast..." />}
+      {loading && <LoadingSpinner message="Training both models and projecting forward" />}
 
-      {result && !loading && (
+      {!loading && !error && datasetId && !result && (
+        <Panel>
+          <p className="max-w-[70ch] text-ink/75">
+            Nothing forecast yet. Set the two options above and run it. Forecasts read best with
+            roughly thirty periods of history behind them, so grouping a short file by month may
+            leave too little to learn from.
+          </p>
+        </Panel>
+      )}
+
+      {result && !loading && <ForecastResult result={result} />}
+    </div>
+  );
+}
+
+function ForecastResult({ result }) {
+  const period = PERIODS[result.period_type] || PERIODS.monthly;
+  // The backend names the winner in prose ("Exponential Smoothing"); match it back
+  // to a metrics key rather than assuming which of the two it is.
+  const bestKey = Object.keys(MODEL_NAMES).find(
+    (key) => MODEL_NAMES[key].toLowerCase() === String(result.best_model).toLowerCase()
+  );
+  const best = bestKey ? result.models?.[bestKey] : null;
+  const bestScored = best ? wasScored(best) : false;
+  const bestName = bestKey ? MODEL_NAMES[bestKey] : result.best_model;
+
+  return (
+    <div className="space-y-6">
+      <p className="flex items-start gap-2.5 bg-sticker px-4 py-3 text-ink">
+        <Trophy size={17} className="mt-0.5 shrink-0" aria-hidden="true" />
+        <span className="max-w-[78ch]">
+          <span className="font-semibold">{bestName}</span> won this run.{' '}
+          {bestScored ? (
+            <>
+              Measured against the slice of history held back from training, it missed by{' '}
+              <span className="font-semibold tabular-nums">{formatPercent(best.mape)}</span> on
+              average. Read the projection as a direction, not a promise.
+            </>
+          ) : (
+            <>
+              There was too little history left over to score it, so no error figure stands behind
+              this projection. Add more sales or group by a shorter period before trusting it.
+            </>
+          )}
+        </span>
+      </p>
+
+      <Panel
+        title="History and forecast"
+        description={`Your ${result.column} grouped ${period.grouped}, with the next ${result.periods} ${period.units} projected. The band behind the dashed line is the range the model puts around each projected point.`}
+      >
+        <ForecastChart result={result} />
+      </Panel>
+
+      <ModelComparison models={result.models} bestModel={result.best_model} />
+
+      <Panel
+        title="Forecast, period by period"
+        description="The same projection as figures, with the low and high edge of each range."
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[30rem] text-sm">
+            <caption className="sr-only">Projected {result.column} for each upcoming period</caption>
+            <thead>
+              <tr className="border-b border-kraft">
+                <th scope="col" className="py-2 pr-4 text-left font-medium text-ink/75">
+                  Period starting
+                </th>
+                <th scope="col" className="py-2 pr-4 text-right font-medium text-ink/75">
+                  Forecast
+                </th>
+                <th scope="col" className="py-2 pr-4 text-right font-medium text-ink/75">
+                  Low
+                </th>
+                <th scope="col" className="py-2 text-right font-medium text-ink/75">
+                  High
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {(result.forecast || []).map((f) => (
+                <tr key={f.date} className="border-b border-kraft last:border-b-0">
+                  <td className="py-2.5 pr-4 text-ink">{formatFullDate(f.date)}</td>
+                  <td className="py-2.5 pr-4 text-right font-medium tabular-nums text-ink">
+                    {formatCurrencyExact(f.value)}
+                  </td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums text-ink/75">
+                    {formatCurrencyExact(f.lower)}
+                  </td>
+                  <td className="py-2.5 text-right tabular-nums text-ink/75">
+                    {formatCurrencyExact(f.upper)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+/**
+ * Dots are drawn only where the series actually has a point. The last historical
+ * value is repeated into the forecast series so the dashed line and its band start
+ * from the last real sale rather than floating in space, and that repeated point
+ * is suppressed here so it does not show two markers stacked on one another.
+ */
+function dotFor(color, kind) {
+  return ({ cx, cy, payload }) => {
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+    if (payload?.kind !== kind) return null;
+    return <circle cx={cx} cy={cy} r={4} fill={color} stroke={CHART_INK.surface} strokeWidth={1.5} />;
+  };
+}
+
+const historyDot = dotFor(HISTORY_COLOR, 'history');
+const forecastDot = dotFor(FORECAST_COLOR, 'forecast');
+
+function ForecastChart({ result }) {
+  const history = result.historical || [];
+  const forecast = result.forecast || [];
+  const lastIndex = history.length - 1;
+
+  const chartData = [
+    ...history.map((h, i) => ({
+      date: h.date,
+      actual: h.value,
+      kind: 'history',
+      ...(i === lastIndex ? { forecast: h.value, range: [h.value, h.value] } : {}),
+    })),
+    ...forecast.map((f) => ({
+      date: f.date,
+      forecast: f.value,
+      lower: f.lower,
+      upper: f.upper,
+      range: [f.lower, f.upper],
+      kind: 'forecast',
+    })),
+  ];
+
+  const showDots = chartData.length <= 40;
+
+  return (
+    <>
+      <ul className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-ink/75">
+        <li className="flex items-center gap-2">
+          <svg width="24" height="8" className="shrink-0" aria-hidden="true">
+            <line x1="0" y1="4" x2="24" y2="4" stroke={HISTORY_COLOR} strokeWidth="2" />
+          </svg>
+          Sold
+        </li>
+        <li className="flex items-center gap-2">
+          <svg width="24" height="8" className="shrink-0" aria-hidden="true">
+            <line
+              x1="0"
+              y1="4"
+              x2="24"
+              y2="4"
+              stroke={FORECAST_COLOR}
+              strokeWidth="2"
+              strokeDasharray="6 4"
+            />
+          </svg>
+          Forecast
+        </li>
+        <li className="flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="block h-3 w-6 shrink-0"
+            style={{ backgroundColor: FORECAST_COLOR, opacity: 0.16 }}
+          />
+          Forecast range
+        </li>
+      </ul>
+
+      <ResponsiveContainer width="100%" height={360}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke={CHART_INK.grid} strokeDasharray="none" vertical={false} />
+          <XAxis
+            dataKey="date"
+            tickFormatter={(v) => formatAxisDate(v, result.period_type)}
+            tick={{ fontSize: 11, fill: CHART_INK.label }}
+            axisLine={{ stroke: CHART_INK.axis }}
+            tickLine={false}
+            minTickGap={24}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            tickFormatter={formatCurrencyAxis}
+            tick={{ fontSize: 11, fill: CHART_INK.label }}
+            axisLine={{ stroke: CHART_INK.axis }}
+            tickLine={false}
+            width={72}
+          />
+          <Tooltip
+            content={<ChartTooltip periodType={result.period_type} />}
+            cursor={{ stroke: CHART_INK.axis, strokeWidth: 1 }}
+          />
+          <Area
+            type="monotone"
+            dataKey="range"
+            stroke="none"
+            fill={FORECAST_COLOR}
+            fillOpacity={0.16}
+            {...chartAnim()}
+            activeDot={false}
+            name="Forecast range"
+          />
+          <Line
+            type="monotone"
+            dataKey="actual"
+            name="Sold"
+            stroke={HISTORY_COLOR}
+            strokeWidth={2}
+            dot={showDots ? historyDot : false}
+            activeDot={{ r: 5, fill: HISTORY_COLOR, stroke: CHART_INK.surface, strokeWidth: 2 }}
+            {...chartAnim()}
+          />
+          <Line
+            type="monotone"
+            dataKey="forecast"
+            name="Forecast"
+            stroke={FORECAST_COLOR}
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            dot={showDots ? forecastDot : false}
+            activeDot={{ r: 5, fill: FORECAST_COLOR, stroke: CHART_INK.surface, strokeWidth: 2 }}
+            {...chartAnim()}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </>
+  );
+}
+
+function ChartTooltip({ active, payload, periodType }) {
+  if (!active || !payload?.length) return null;
+
+  const row = payload[0].payload;
+  if (!row) return null;
+
+  return (
+    <div className="border border-kraft bg-sheet px-3 py-2 text-sm text-ink">
+      <p className="font-medium">{formatAxisDate(row.date, periodType)}</p>
+      {row.kind === 'history' ? (
+        <p className="mt-1 tabular-nums">Sold {formatCurrencyExact(row.actual)}</p>
+      ) : (
         <>
-          <div className="flex items-center gap-2 mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <Trophy size={16} className="text-green-600" />
-            <span className="text-sm text-green-700">
-              Best model: <strong>{result.best_model}</strong>
-            </span>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">
-              Forecast: {result.column} ({result.period_type})
-            </h3>
-            <ResponsiveContainer width="100%" height={400}>
-              <ComposedChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: '#9ca3af' }}
-                  tickFormatter={(v) => {
-                    const d = new Date(v);
-                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                  }}
-                />
-                <YAxis tick={{ fontSize: 12, fill: '#9ca3af' }} />
-                <Tooltip
-                  labelFormatter={(v) => new Date(v).toLocaleDateString()}
-                  formatter={(v, name) => [typeof v === 'number' ? v.toLocaleString() : v, name]}
-                />
-                <Legend />
-                <Line type="monotone" dataKey="actual" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="Actual" />
-                <Line type="monotone" dataKey="forecast" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Forecast" />
-                <Area type="monotone" dataKey="upper" stroke="none" fill="#f59e0b" fillOpacity={0.1} name="Upper Bound" />
-                <Area type="monotone" dataKey="lower" stroke="none" fill="#f59e0b" fillOpacity={0.1} name="Lower Bound" />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-
-          <ModelComparison models={result.models} bestModel={result.best_model} />
-
-          <div className="bg-white border border-gray-200 rounded-xl p-4 mt-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Forecast Values</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Date</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Forecast</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Lower Bound</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Upper Bound</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {result.forecast.map((f) => (
-                    <tr key={f.date} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 text-gray-700">{new Date(f.date).toLocaleDateString()}</td>
-                      <td className="px-3 py-2 text-right font-medium text-gray-900">{f.value.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right text-gray-500">{f.lower.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right text-gray-500">{f.upper.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <p className="mt-1 tabular-nums">Forecast {formatCurrencyExact(row.forecast)}</p>
+          <p className="mt-0.5 tabular-nums text-ink/75">
+            Range {formatCurrencyExact(row.lower)} to {formatCurrencyExact(row.upper)}
+          </p>
         </>
       )}
     </div>
@@ -180,42 +456,71 @@ export default function ForecastPage() {
 }
 
 function ModelComparison({ models, bestModel }) {
+  const entries = Object.entries(models || {});
+  const anyUnscored = entries.some(([, model]) => !wasScored(model));
+
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">Model Comparison</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {Object.entries(models).map(([key, model]) => {
-          const name = key === 'xgboost' ? 'XGBoost' : 'Exponential Smoothing';
-          const isBest = name === bestModel;
-          return (
-            <div
-              key={key}
-              className={`p-4 rounded-lg border ${isBest ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-gray-50'}`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-medium text-sm text-gray-800">{name}</span>
-                {isBest && (
-                  <span className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">Best</span>
-                )}
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <p className="text-xs text-gray-500">MAE</p>
-                  <p className="text-sm font-semibold text-gray-800">{model.mae}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">RMSE</p>
-                  <p className="text-sm font-semibold text-gray-800">{model.rmse}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">MAPE</p>
-                  <p className="text-sm font-semibold text-gray-800">{model.mape}%</p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+    <Panel
+      title="How the two models scored"
+      description="Both models learned from the front of your history and were scored on the tail they never saw. MAE is the average miss, RMSE punishes the occasional big miss harder, and MAPE is the average miss as a share of the real figure. Lower is better in all three."
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[30rem] text-sm">
+          <caption className="sr-only">Accuracy of each model on the held-back history</caption>
+          <thead>
+            <tr className="border-b border-kraft">
+              <th scope="col" className="py-2 pr-4 text-left font-medium text-ink/75">
+                Model
+              </th>
+              <th scope="col" className="py-2 pr-4 text-right font-medium text-ink/75">
+                MAE
+              </th>
+              <th scope="col" className="py-2 pr-4 text-right font-medium text-ink/75">
+                RMSE
+              </th>
+              <th scope="col" className="py-2 text-right font-medium text-ink/75">
+                MAPE
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map(([key, model]) => {
+              const name = MODEL_NAMES[key] || key;
+              const isBest = name.toLowerCase() === String(bestModel).toLowerCase();
+              const scored = wasScored(model);
+
+              return (
+                <tr key={key} className="border-b border-kraft last:border-b-0">
+                  <th scope="row" className="py-2.5 pr-4 text-left font-medium text-ink">
+                    {name}
+                    {isBest && (
+                      <span className="ml-2 inline-block bg-ink px-1.5 py-0.5 text-xs font-medium text-paper">
+                        Picked
+                      </span>
+                    )}
+                  </th>
+                  <td className="py-2.5 pr-4 text-right tabular-nums text-ink">
+                    {scored ? formatCurrencyExact(model.mae) : '—'}
+                  </td>
+                  <td className="py-2.5 pr-4 text-right tabular-nums text-ink">
+                    {scored ? formatCurrencyExact(model.rmse) : '—'}
+                  </td>
+                  <td className="py-2.5 text-right tabular-nums text-ink">
+                    {scored ? formatPercent(model.mape) : '—'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-    </div>
+
+      {anyUnscored && (
+        <p className="mt-3 max-w-[70ch] text-sm text-ink/75">
+          A dash means there was not enough history left over to score that model, so it has no
+          measured accuracy behind it.
+        </p>
+      )}
+    </Panel>
   );
 }

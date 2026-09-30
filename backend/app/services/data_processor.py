@@ -6,13 +6,52 @@ import pandas as pd
 from app.config import UPLOAD_DIR
 
 
+# Sales exports rarely arrive as UTF-8. Excel on Windows writes cp1252 by
+# default, and the public Superstore dataset carries non-breaking spaces in its
+# product names that are not valid UTF-8 at all. These are ordered by how likely
+# each is to be *correct*, not merely to parse: latin-1 decodes any byte
+# sequence whatsoever, so it can only ever be the last resort.
+CSV_ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")
+
+
 def read_uploaded_file(file_path: str) -> pd.DataFrame:
     path = Path(file_path)
-    if path.suffix == ".csv":
-        return pd.read_csv(path)
-    elif path.suffix in (".xlsx", ".xls"):
-        return pd.read_excel(path)
+    suffix = path.suffix.lower()
+
+    if suffix == ".csv":
+        return _normalise(_read_csv_any_encoding(path))
+    if suffix in (".xlsx", ".xls"):
+        return _normalise(pd.read_excel(path))
     raise ValueError(f"Unsupported file type: {path.suffix}")
+
+
+def _read_csv_any_encoding(path: Path) -> pd.DataFrame:
+    for encoding in CSV_ENCODINGS:
+        try:
+            return pd.read_csv(path, encoding=encoding)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError(
+        f"Could not read {path.name}. The file is not in a text encoding this "
+        "app recognises — re-save it from your spreadsheet as CSV UTF-8 and "
+        "upload it again."
+    )
+
+
+def _normalise(df: pd.DataFrame) -> pd.DataFrame:
+    """Tidy away characters that are invisible but not harmless.
+
+    A non-breaking space reads as a space and is a different character from one,
+    so "Conference\xa0phone" and "Conference phone" group as two separate
+    products and quietly split a product's revenue in half. Only that character
+    is touched; no value is otherwise altered.
+    """
+    df.columns = [
+        col.replace("\xa0", " ").strip() if isinstance(col, str) else col for col in df.columns
+    ]
+    for col in df.columns[df.dtypes == object]:
+        df[col] = df[col].map(lambda v: v.replace("\xa0", " ") if isinstance(v, str) else v)
+    return df
 
 
 def get_column_info(df: pd.DataFrame) -> list[dict]:

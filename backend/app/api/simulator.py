@@ -72,7 +72,10 @@ def get_explanation(
 
     revenue_col = mappings.get("revenue")
     if not revenue_col:
-        raise HTTPException(status_code=400, detail="Revenue column not mapped")
+        raise HTTPException(
+            status_code=400,
+            detail="This page needs to know which column holds your sales figures.",
+        )
 
     df = read_uploaded_file(dataset.file_path)
 
@@ -88,7 +91,13 @@ def get_explanation(
             feature_cols.append(col)
 
     if len(feature_cols) < 2:
-        raise HTTPException(status_code=400, detail="Need at least 2 feature columns mapped")
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This page needs at least two other columns to weigh against your sales "
+                "figures, such as quantity, discount, profit, product categories or sales regions."
+            ),
+        )
 
     result = explain_model(df, revenue_col, feature_cols)
     if "error" in result:

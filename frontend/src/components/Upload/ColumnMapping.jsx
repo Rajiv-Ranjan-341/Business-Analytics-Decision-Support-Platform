@@ -1,39 +1,102 @@
-import { useState, useEffect } from 'react';
-import { Check, Wand2 } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Check, Sparkles, TriangleAlert } from 'lucide-react';
+import Panel from '../Shared/Panel';
 import {
   getColumnSuggestions,
   saveColumnMappings,
   getColumnMappings,
 } from '../../api/client';
 
-const ROLES = [
-  { key: 'date', label: 'Date', description: 'Order or transaction date' },
-  { key: 'revenue', label: 'Revenue / Sales', description: 'Revenue or sales amount' },
-  { key: 'profit', label: 'Profit', description: 'Profit amount' },
-  { key: 'quantity', label: 'Quantity', description: 'Number of units' },
-  { key: 'customer_id', label: 'Customer ID', description: 'Customer identifier' },
-  { key: 'product', label: 'Product', description: 'Product name or ID' },
-  { key: 'category', label: 'Category', description: 'Product category' },
-  { key: 'region', label: 'Region', description: 'Geographic region' },
-  { key: 'discount', label: 'Discount', description: 'Discount applied' },
-  { key: 'cost', label: 'Cost', description: 'Product or order cost' },
+/**
+ * The ten role keys below must match suggest_column_roles() in
+ * backend/app/services/data_processor.py exactly. They are grouped here only so a
+ * shop owner reads three short questions instead of one wall of ten selects — the
+ * money group first, because that is the answer the whole product is built on.
+ */
+const GROUPS = [
+  {
+    id: 'money',
+    title: 'Money',
+    blurb:
+      'Every figure in this app is counted from these. Point revenue at the right column and the rest follows.',
+    highlight: true,
+    roles: [
+      {
+        key: 'revenue',
+        label: 'Sold',
+        hint: 'What the customer paid, before any costs come off',
+        required: true,
+      },
+      { key: 'profit', label: 'Kept', hint: 'What was left once costs came off' },
+      { key: 'cost', label: 'Cost', hint: 'What the item cost you to buy or make' },
+      { key: 'discount', label: 'Discount', hint: 'How much came off the price' },
+    ],
+  },
+  {
+    id: 'timing',
+    title: 'When and how many',
+    blurb: 'Trends, forecasts and month-on-month comparisons all read from these two.',
+    roles: [
+      {
+        key: 'date',
+        label: 'Order date',
+        hint: 'The day the sale happened',
+        required: true,
+      },
+      { key: 'quantity', label: 'Units', hint: 'How many went out on the line' },
+    ],
+  },
+  {
+    id: 'grouping',
+    title: 'Who and what',
+    blurb: 'These split every figure into the groups you actually manage day to day.',
+    roles: [
+      {
+        key: 'customer_id',
+        label: 'Customer',
+        hint: 'Whatever you use to tell one customer from another',
+      },
+      { key: 'product', label: 'Product', hint: 'The item name or code' },
+      { key: 'category', label: 'Category', hint: 'How you group products together' },
+      { key: 'region', label: 'Region', hint: 'Store, city, state or territory' },
+    ],
+  },
 ];
+
+const ALL_ROLES = GROUPS.flatMap((group) => group.roles);
 
 export default function ColumnMapping({ datasetId, columns }) {
   const [mappings, setMappings] = useState({});
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const fieldId = useId();
+  const savedTimer = useRef(null);
+
+  // Accepts either bare column names or the richer column_stats objects, so a
+  // sample value can be echoed back under a mapping as a sanity check.
+  const columnList = (columns || []).map((col) =>
+    typeof col === 'string' ? { name: col } : col
+  );
+  const columnNames = columnList.map((col) => col.name);
+  const statsByName = new Map(columnList.map((col) => [col.name, col]));
 
   useEffect(() => {
-    getColumnMappings(datasetId).then((res) => {
-      if (res.mappings && Object.keys(res.mappings).length > 0) {
-        setMappings(res.mappings);
-      }
-    }).catch(() => {});
+    getColumnMappings(datasetId)
+      .then((res) => {
+        if (res.mappings && Object.keys(res.mappings).length > 0) {
+          setMappings(res.mappings);
+        }
+      })
+      .catch(() => {});
   }, [datasetId]);
+
+  useEffect(() => () => clearTimeout(savedTimer.current), []);
 
   async function handleAutoDetect() {
     setLoading(true);
+    setError(null);
     try {
       const res = await getColumnSuggestions(datasetId);
       const nonNull = {};
@@ -41,6 +104,11 @@ export default function ColumnMapping({ datasetId, columns }) {
         if (v) nonNull[k] = v;
       }
       setMappings((prev) => ({ ...prev, ...nonNull }));
+      setSaved(false);
+    } catch {
+      setError(
+        'Could not read the column names just now. Choose the columns yourself, or try the guess again.'
+      );
     } finally {
       setLoading(false);
     }
@@ -48,9 +116,19 @@ export default function ColumnMapping({ datasetId, columns }) {
 
   async function handleSave() {
     setSaved(false);
-    await saveColumnMappings(datasetId, mappings);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setError(null);
+    setSaving(true);
+    try {
+      await saveColumnMappings(datasetId, mappings);
+      setSaved(true);
+      clearTimeout(savedTimer.current);
+      savedTimer.current = setTimeout(() => setSaved(false), 2000);
+    } catch {
+      // Previously this rejection went nowhere and the user was left thinking it saved.
+      setError('Nothing was saved. Check the backend is running, then press save again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleChange(role, value) {
@@ -58,55 +136,147 @@ export default function ColumnMapping({ datasetId, columns }) {
     setSaved(false);
   }
 
+  const mappedCount = ALL_ROLES.filter((role) => mappings[role.key]).length;
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-600">
-          Map your data columns to business roles so the platform can analyze them.
-        </p>
+    <Panel
+      title="What each column means"
+      description="Point each role at a column from your file. Every other page reads these, so this is the step worth getting right."
+      bodyClassName="p-0"
+      action={
         <button
+          type="button"
           onClick={handleAutoDetect}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors"
+          className="inline-flex items-center gap-2 border border-ink px-3.5 py-2 text-sm font-medium text-ink enabled:hover:bg-ink enabled:hover:text-paper disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
-          <Wand2 size={14} />
-          {loading ? 'Detecting...' : 'Auto-detect'}
+          <Sparkles size={14} aria-hidden="true" />
+          {loading ? 'Reading column names' : 'Guess from column names'}
         </button>
-      </div>
+      }
+    >
+      {GROUPS.map((group) => (
+        <fieldset key={group.id} className="border-b border-kraft px-5 py-5">
+          <legend className="font-display text-xl font-semibold text-ink">
+            <span className={group.highlight ? 'bg-sticker px-1.5 py-0.5' : undefined}>
+              {group.title}
+            </span>
+          </legend>
+          <p className="mt-1.5 max-w-[70ch] text-sm text-ink/75">{group.blurb}</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {ROLES.map(({ key, label, description }) => (
-          <div key={key} className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">{label}</label>
-            <select
-              value={mappings[key] || ''}
-              onChange={(e) => handleChange(key, e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">-- Select column --</option>
-              {columns.map((col) => (
-                <option key={col} value={col}>
-                  {col}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-400">{description}</p>
+          <div className="mt-4 divide-y divide-kraft border-t border-kraft">
+            {group.roles.map((role) => (
+              <RoleRow
+                key={role.key}
+                role={role}
+                idPrefix={fieldId}
+                value={mappings[role.key] || ''}
+                columnNames={columnNames}
+                stat={statsByName.get(mappings[role.key])}
+                onChange={handleChange}
+              />
+            ))}
           </div>
-        ))}
+        </fieldset>
+      ))}
+
+      <div className="px-5 py-5">
+        {error && (
+          <p
+            role="alert"
+            className="mb-4 flex items-start gap-2.5 border-l-[3px] border-warn bg-paper py-3 pr-4 pl-3.5 text-sm text-ink"
+          >
+            <TriangleAlert size={16} className="mt-0.5 shrink-0 text-warn" aria-hidden="true" />
+            <span>{error}</span>
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-ink px-6 py-3 font-display text-lg font-semibold tracking-wide text-paper enabled:hover:bg-ink/90 disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+          >
+            {saving ? 'Saving' : 'Save column meanings'}
+          </button>
+
+          <p className="text-sm text-ink/75">
+            <span className="tabular-nums">{mappedCount}</span> of{' '}
+            <span className="tabular-nums">{ALL_ROLES.length}</span> roles point at a column
+          </p>
+
+          <span role="status" aria-live="polite" className="flex items-center gap-1.5 text-sm text-ink">
+            {saved && (
+              <>
+                <Check size={15} aria-hidden="true" />
+                Saved
+              </>
+            )}
+          </span>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function RoleRow({ role, idPrefix, value, columnNames, stat, onChange }) {
+  const { key, label, hint, required } = role;
+  const selectId = `${idPrefix}-${key}`;
+  const hintId = `${selectId}-hint`;
+  // A mapping saved against a column this file does not have would otherwise
+  // render as a blank select with no explanation.
+  const missing = value !== '' && !columnNames.includes(value);
+  const sample = stat?.top_values?.[0]?.value;
+
+  return (
+    <div className="grid gap-x-6 gap-y-2 py-3.5 md:grid-cols-[minmax(0,1fr)_minmax(0,17rem)] md:items-start">
+      <div>
+        <label htmlFor={selectId} className="font-medium text-ink">
+          {label}
+        </label>
+        {required && (
+          <span
+            className="ml-2 border border-kraft px-1.5 py-0.5 text-xs text-ink/75 align-middle"
+            aria-hidden="true"
+          >
+            needed
+          </span>
+        )}
+        <p id={hintId} className="mt-0.5 max-w-[60ch] text-sm text-ink/75">
+          {hint}
+          {required && ' — most pages need this one.'}
+        </p>
       </div>
 
-      <div className="flex items-center gap-3 mt-4">
-        <button
-          onClick={handleSave}
-          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+      <div>
+        <select
+          id={selectId}
+          aria-describedby={hintId}
+          value={value}
+          onChange={(e) => onChange(key, e.target.value)}
+          className="w-full border border-kraft bg-sheet px-3 py-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
-          Save Mappings
-        </button>
-        {saved && (
-          <span className="flex items-center gap-1 text-sm text-green-600">
-            <Check size={14} />
-            Saved
-          </span>
+          <option value="">Not in this file</option>
+          {missing && <option value={value}>{value} (missing from this file)</option>}
+          {columnNames.map((col) => (
+            <option key={col} value={col}>
+              {col}
+            </option>
+          ))}
+        </select>
+
+        {missing && (
+          <p className="mt-1.5 flex items-start gap-1.5 text-xs text-ink/75">
+            <TriangleAlert size={12} className="mt-0.5 shrink-0 text-warn" aria-hidden="true" />
+            <span>This file has no column by that name. Pick another one.</span>
+          </p>
+        )}
+
+        {!missing && value !== '' && sample != null && (
+          <p className="mt-1.5 truncate text-xs text-ink/75" title={String(sample)}>
+            Reads like <span className="font-receipt text-ink">{String(sample)}</span>
+          </p>
         )}
       </div>
     </div>

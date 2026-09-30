@@ -26,11 +26,20 @@ def get_diagnosis(
 
     date_col = mappings.get("date")
     if not date_col:
-        raise HTTPException(status_code=400, detail="Date column not mapped")
+        raise HTTPException(
+            status_code=400,
+            detail="This page needs to know which column holds your order dates.",
+        )
 
     metric_col = metric or mappings.get("revenue")
     if not metric_col:
-        raise HTTPException(status_code=400, detail="No metric specified and revenue not mapped")
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This page needs to know which column holds your sales figures, "
+                "or another number to explain instead."
+            ),
+        )
 
     df = read_uploaded_file(dataset.file_path)
     if metric_col not in df.columns:

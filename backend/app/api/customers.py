@@ -9,6 +9,13 @@ from app.services.segmentation import segment_customers
 router = APIRouter(prefix="/api/customers", tags=["customers"])
 
 
+def _and_list(items: list[str]) -> str:
+    """Join for a sentence a person reads: "a", "a and b", "a, b and c"."""
+    if len(items) <= 1:
+        return "".join(items)
+    return "%s and %s" % (", ".join(items[:-1]), items[-1])
+
+
 @router.post("/{dataset_id}/segment")
 def run_segmentation(
     dataset_id: int,
@@ -33,14 +40,16 @@ def run_segmentation(
     if not all([customer_col, date_col, revenue_col]):
         missing = []
         if not customer_col:
-            missing.append("customer_id")
+            missing.append("customer reference")
         if not date_col:
-            missing.append("date")
+            missing.append("order dates")
         if not revenue_col:
-            missing.append("revenue")
+            missing.append("sales figures")
         raise HTTPException(
             status_code=400,
-            detail=f"Missing column mappings: {', '.join(missing)}. Configure them in Upload > Column Mapping.",
+            detail=(
+                f"Customer groups need to know where to find your {_and_list(missing)}."
+            ),
         )
 
     df = read_uploaded_file(dataset.file_path)

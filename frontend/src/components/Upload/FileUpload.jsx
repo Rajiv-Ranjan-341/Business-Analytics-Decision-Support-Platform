@@ -1,8 +1,19 @@
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileSpreadsheet, AlertCircle } from 'lucide-react';
+import { FileSpreadsheet, LoaderCircle, TriangleAlert, Upload } from 'lucide-react';
+import Panel from '../Shared/Panel';
 import { uploadDataset } from '../../api/client';
 
+// Mirrors MAX_UPLOAD_SIZE_MB in backend/app/config.py. The server is the authority;
+// this is only the figure we print so the user is told before they waste an upload.
+const MAX_UPLOAD_MB = 50;
+
+/**
+ * The intake tray. It deliberately echoes the printer slot on the landing page —
+ * the receipt feeds out there, the sales file feeds in here — rather than being a
+ * dashed rounded rectangle. Kraft board on a ruled sheet; the day-glo sticker is
+ * held back for the one moment a file is actually hovering over the target.
+ */
 export default function FileUpload({ onUploadSuccess }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
@@ -20,7 +31,8 @@ export default function FileUpload({ onUploadSuccess }) {
         onUploadSuccess(result);
       } catch (err) {
         const msg =
-          err.response?.data?.detail || 'Upload failed. Please try again.';
+          err.response?.data?.detail ||
+          'The server could not read that file. Check it opens in a spreadsheet, then try again.';
         setError(msg);
       } finally {
         setUploading(false);
@@ -29,8 +41,19 @@ export default function FileUpload({ onUploadSuccess }) {
     [onUploadSuccess]
   );
 
+  // Without this a rejected file did nothing at all — no upload, no message.
+  const onDropRejected = useCallback((rejections) => {
+    const name = rejections[0]?.file?.name;
+    setError(
+      rejections.length > 1
+        ? 'Send one file at a time. Drop a single CSV or Excel export and it will be read straight away.'
+        : `${name ? `“${name}” is` : 'That file is'} not a CSV or Excel export. Save it as .csv, .xlsx or .xls, then drop it here.`
+    );
+  }, []);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    onDropRejected,
     accept: {
       'text/csv': ['.csv'],
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
@@ -41,56 +64,79 @@ export default function FileUpload({ onUploadSuccess }) {
   });
 
   return (
-    <div>
+    <Panel
+      title="Bring in a sales file"
+      description={`A CSV or Excel export from your till or spreadsheet, up to ${MAX_UPLOAD_MB} MB. Nothing leaves this machine.`}
+    >
       <div
-        {...getRootProps()}
-        className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
-          isDragActive
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
-        } ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+        {...getRootProps({
+          role: 'button',
+          'aria-label': 'Choose a sales file to read, or drop one here',
+          'aria-disabled': uploading || undefined,
+          'aria-busy': uploading || undefined,
+        })}
+        className={`block w-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink ${
+          uploading ? 'cursor-progress' : 'cursor-pointer'
+        }`}
       >
         <input {...getInputProps()} />
 
-        <div className="flex flex-col items-center gap-3">
-          {uploading ? (
-            <>
-              <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-gray-600">Uploading and processing...</p>
-            </>
-          ) : (
-            <>
-              <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center">
-                {isDragActive ? (
-                  <FileSpreadsheet size={28} className="text-blue-500" />
-                ) : (
-                  <Upload size={28} className="text-blue-500" />
-                )}
-              </div>
-              <div>
-                <p className="text-base font-medium text-gray-700">
-                  {isDragActive
-                    ? 'Drop your file here'
-                    : 'Drag & drop your business data'}
-                </p>
-                <p className="text-sm text-gray-400 mt-1">
-                  CSV or Excel files up to 50MB
-                </p>
-              </div>
-              <button className="mt-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
-                Browse Files
-              </button>
-            </>
+        {/* The feed slot, straight off the printer on the landing page. */}
+        <div className="h-1.5 bg-ink/75" aria-hidden="true" />
+
+        <div
+          className={`flex flex-col items-center gap-4 px-6 py-12 text-center transition-colors duration-150 ${
+            isDragActive ? 'bg-sticker' : 'bg-kraft'
+          }`}
+        >
+          <span
+            className="flex h-12 w-12 shrink-0 items-center justify-center bg-ink text-paper"
+            aria-hidden="true"
+          >
+            {uploading ? (
+              <LoaderCircle size={22} className="animate-spin motion-reduce:animate-none" />
+            ) : isDragActive ? (
+              <FileSpreadsheet size={22} />
+            ) : (
+              <Upload size={22} />
+            )}
+          </span>
+
+          <div role="status" aria-live="polite">
+            <p className="font-display text-2xl font-semibold text-ink">
+              {uploading
+                ? 'Reading your file'
+                : isDragActive
+                  ? 'Let go and it starts reading'
+                  : 'Drop your sales file here'}
+            </p>
+            <p className="mt-1 text-sm text-ink/75">
+              {uploading
+                ? 'A big export can take a moment. Stay on this page.'
+                : 'Or pick one from your computer.'}
+            </p>
+          </div>
+
+          {!uploading && (
+            /* Not a button: the whole tray is the control, so a nested button would
+               be a second tab stop and a second accessible name for one action.
+               Clicking here still opens the file dialog through the tray. */
+            <span className="bg-ink px-6 py-3 font-display text-lg font-semibold tracking-wide text-paper">
+              Choose a file
+            </span>
           )}
         </div>
       </div>
 
       {error && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
-          <AlertCircle size={16} />
-          {error}
-        </div>
+        <p
+          role="alert"
+          className="mt-4 flex items-start gap-2.5 border-l-[3px] border-warn bg-paper py-3 pr-4 pl-3.5 text-sm text-ink"
+        >
+          <TriangleAlert size={16} className="mt-0.5 shrink-0 text-warn" aria-hidden="true" />
+          <span>{error}</span>
+        </p>
       )}
-    </div>
+    </Panel>
   );
 }

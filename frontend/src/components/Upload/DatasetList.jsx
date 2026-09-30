@@ -1,52 +1,68 @@
-import { FileSpreadsheet, Trash2, Eye } from 'lucide-react';
+import { Eye, FileSpreadsheet, Trash2 } from 'lucide-react';
+import { formatNumber } from '../../lib/format';
 
+/**
+ * A ledger of everything read in so far: hairline-ruled rows, no cards.
+ * Rendered inside a Panel with no body padding, so the rules run the full width
+ * of the sheet and the rows carry their own inset.
+ */
 export default function DatasetList({ datasets, onSelect, onDelete }) {
   if (!datasets || datasets.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-400 text-sm">
-        No datasets uploaded yet. Upload your first dataset above.
-      </div>
+      <p className="max-w-[62ch] px-5 py-8 text-ink/75">
+        Nothing read in yet. Drop a CSV or Excel export in the tray above and it lands here,
+        ready to check before the rest of the app reads from it.
+      </p>
     );
   }
 
   return (
-    <div className="space-y-2">
+    <ul className="divide-y divide-kraft">
       {datasets.map((ds) => (
-        <div
+        <li
           key={ds.id}
-          className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
+          className="flex flex-wrap items-start justify-between gap-x-5 gap-y-3 px-5 py-4"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-              <FileSpreadsheet size={20} className="text-blue-500" />
-            </div>
-            <div>
-              <p className="font-medium text-gray-800 text-sm">{ds.name}</p>
-              <p className="text-xs text-gray-400">
-                {ds.row_count.toLocaleString()} rows &middot;{' '}
-                {ds.column_count} columns &middot;{' '}
-                {new Date(ds.upload_date).toLocaleDateString()}
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <FileSpreadsheet size={18} className="mt-1 shrink-0 text-ink/75" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="truncate font-display text-xl font-semibold text-ink">{ds.name}</p>
+              <p className="mt-0.5 text-sm text-ink/75">
+                <span className="tabular-nums">{formatNumber(ds.row_count)}</span> rows across{' '}
+                <span className="tabular-nums">{formatNumber(ds.column_count)}</span> columns, read
+                in on{' '}
+                {new Date(ds.upload_date).toLocaleDateString(undefined, {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                })}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
+              type="button"
               onClick={() => onSelect(ds)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 bg-ink px-4 py-2 text-sm font-medium text-paper hover:bg-ink/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
             >
-              <Eye size={14} />
-              View
+              <Eye size={14} aria-hidden="true" />
+              Open
+              <span className="sr-only"> {ds.name}</span>
             </button>
+            {/* Removal is plain ink. Red in this app means money lost, nothing else. */}
             <button
+              type="button"
               onClick={() => onDelete(ds.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 border border-kraft px-4 py-2 text-sm font-medium text-ink hover:bg-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
             >
-              <Trash2 size={14} />
+              <Trash2 size={14} aria-hidden="true" />
+              Remove
+              <span className="sr-only"> {ds.name}</span>
             </button>
           </div>
-        </div>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }

@@ -9,6 +9,13 @@ from app.services.profitability import analyze_product_profitability
 router = APIRouter(prefix="/api/products", tags=["products"])
 
 
+def _and_list(items: list[str]) -> str:
+    """Join for a sentence a person reads: "a", "a and b", "a, b and c"."""
+    if len(items) <= 1:
+        return "".join(items)
+    return "%s and %s" % (", ".join(items[:-1]), items[-1])
+
+
 @router.get("/{dataset_id}/profitability")
 def get_product_profitability(dataset_id: int, db: Session = Depends(get_db)):
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
@@ -25,12 +32,14 @@ def get_product_profitability(dataset_id: int, db: Session = Depends(get_db)):
     if not product_col or not revenue_col:
         missing = []
         if not product_col:
-            missing.append("product")
+            missing.append("product names")
         if not revenue_col:
-            missing.append("revenue")
+            missing.append("sales figures")
         raise HTTPException(
             status_code=400,
-            detail=f"Missing column mappings: {', '.join(missing)}",
+            detail=(
+                f"Product profitability needs to know where to find your {_and_list(missing)}."
+            ),
         )
 
     df = read_uploaded_file(dataset.file_path)

@@ -56,7 +56,9 @@ async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get
         raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(e)}")
 
     columns_info = get_column_info(df)
-    name = Path(file.filename).stem.replace("_", " ").replace("-", " ").title()
+    # Underscores and dashes become spaces, then runs of whitespace collapse —
+    # "Sample - Superstore.csv" would otherwise be titled "Sample   Superstore".
+    name = " ".join(Path(file.filename).stem.replace("_", " ").replace("-", " ").split()).title()
 
     dataset = Dataset(
         name=name,
@@ -70,6 +72,16 @@ async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get
     db.add(dataset)
     db.commit()
     db.refresh(dataset)
+
+    # Save the roles we already worked out. The detector reads a normal sales
+    # export correctly, and leaving its answer unsaved means a file that just
+    # uploaded fine shows a warning on every analytics page until someone
+    # confirms a mapping by hand. The mapping screen still overrides all of
+    # this — what is stored here is a starting point, not a decision.
+    for role, column in suggest_column_roles(df).items():
+        if column:
+            db.add(ColumnMapping(dataset_id=dataset.id, role=role, column_name=column))
+    db.commit()
 
     return dataset
 

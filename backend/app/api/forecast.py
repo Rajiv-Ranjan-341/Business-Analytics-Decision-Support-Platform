@@ -30,11 +30,20 @@ def run_forecast(
 
     date_col = mappings.get("date")
     if not date_col:
-        raise HTTPException(status_code=400, detail="Date column not mapped")
+        raise HTTPException(
+            status_code=400,
+            detail="The forecast needs to know which column holds your order dates.",
+        )
 
     value_col = column or mappings.get("revenue")
     if not value_col:
-        raise HTTPException(status_code=400, detail="No value column specified or revenue not mapped")
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "The forecast needs to know which column holds your sales figures, "
+                "or another column to project instead."
+            ),
+        )
 
     df = read_uploaded_file(dataset.file_path)
     if value_col not in df.columns:

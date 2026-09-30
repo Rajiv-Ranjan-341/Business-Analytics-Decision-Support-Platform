@@ -14,7 +14,11 @@ def run_what_if(
     discount_col = mappings.get("discount")
 
     if not revenue_col or revenue_col not in df.columns:
-        return {"error": "Revenue column not mapped or not found"}
+        return {
+            "error": (
+                "The simulator needs to know which column holds your sales figures."
+            )
+        }
 
     baseline = _compute_baseline(df, revenue_col, profit_col, quantity_col, discount_col)
 

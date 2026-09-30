@@ -1,12 +1,148 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=Courier+Prime:wght@400;700&display=swap');
 @import "tailwindcss";
+
+/* BizOptAI design tokens.
+   The palette is a thermal receipt: brown-black print on warm grey stock, with a
+   day-glo markdown sticker as the one loud element. Negative money is the only
+   thing on any screen that is red, and there is deliberately no green — profit is
+   plain ink, so red stays the single coloured exception.
+
+   The five chart series below were validated with the dataviz skill's checker
+   against the --color-sheet surface. They pass every gate on the ADJACENT
+   pairlist (bars, lines, stacked areas) at 5 slots. Under the ALL-PAIRS test
+   (scatter, bubble) only the FIRST THREE pass: ochre and sienna collapse to
+   deuteranopic ΔE 0.3 when they can appear together unordered. So scatter and
+   bubble charts cap at three series and fold the rest into "Other". */
+@theme {
+  --color-ink: #2e241a;
+  --color-paper: #eae8e0;
+  --color-sheet: #f4f2ec;
+  --color-sticker: #f2e82b;
+  --color-loss: #a52910;
+  --color-kraft: #cfc3a9;
+
+  --color-grid: #dcd8cc;
+  --color-axis: #b3a68c;
+
+  --color-series-1: #1d63b5;
+  --color-series-2: #b4531c;
+  --color-series-3: #7b3b63;
+  --color-series-4: #8a7414;
+  --color-series-5: #5b5bc4;
+
+  /* Status is reserved and never used as a series colour. "Good" is deliberately
+     absent: positive money wears plain ink. Warning always ships with a text
+     label, never colour alone, because it shares a hue family with series 4. */
+  --color-warn: #8a7414;
+
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "Archivo", system-ui, sans-serif;
+  --font-receipt: "Courier Prime", "Courier New", monospace;
+}
 
 body {
   margin: 0;
-  font-family:
-    "Inter",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  font-family: "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* The one orchestrated motion on the landing page: the receipt feeds out of the
+   printer on load. Nothing else on any page animates on scroll. */
+@keyframes receipt-print {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.receipt-print {
+  animation: receipt-print 900ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* Results feeding out of the printer. Fires when a person's numbers arrive, not
+   when a section scrolls past — stagger it with --feed-delay so a page of panels
+   reads top to bottom like paper coming off a roll. */
+@keyframes paper-feed {
+  from {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-5px);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    transform: translateY(0);
+  }
+}
+
+.paper-feed {
+  animation: paper-feed 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation-delay: var(--feed-delay, 0ms);
+}
+
+/* The sidebar's marker slides between items instead of blinking from one to the
+   next, so the eye can follow where it went. */
+.nav-marker {
+  transition:
+    transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    height 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* Print. The summary sheet is the one thing in this app meant to leave the
+   screen, so paper gets its own rules rather than a screenshot of the UI.
+   Sticker yellow is dropped entirely here — day-glo prints as a muddy grey and
+   wastes ink — which leaves the loss red as the only colour on the page, and it
+   carries a rule and bold weight so it still reads on a mono printer. */
+@page {
+  size: A4 portrait;
+  margin: 16mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff;
+  }
+
+  /* Nothing on paper should animate, and nothing should arrive clipped. */
+  .receipt-print,
+  .paper-feed {
+    animation: none !important;
+    clip-path: none !important;
+    transform: none !important;
+  }
+
+  .sheet-receipt {
+    /* A real receipt is 80mm wide. Keeping true width is the whole point of
+       printing one, so it is set in millimetres rather than pixels. */
+    width: 76mm;
+    break-inside: avoid;
+  }
+
+  /* A4 less its margins is about 178mm, which is narrower than the `md`
+     breakpoint — so the responsive two-column rule never fires on paper and the
+     receipt would print above the text instead of beside it. Paper is not a
+     narrow screen; state the columns outright. */
+  .sheet-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10mm;
+    break-inside: avoid;
+  }
+
+  .sheet-prose {
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .receipt-print,
+  .paper-feed {
+    animation: none;
+    clip-path: none;
+    transform: none;
+  }
+
+  .nav-marker {
+    transition: none;
+  }
 }

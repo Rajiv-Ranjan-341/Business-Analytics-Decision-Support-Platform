@@ -1,15 +1,45 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, BarChart, Bar, Legend,
 } from 'recharts';
-import { AlertTriangle, TrendingUp, TrendingDown, Award } from 'lucide-react';
 import PageHeader from '../components/Shared/PageHeader';
 import DatasetSelector from '../components/Shared/DatasetSelector';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
+import Panel from '../components/Shared/Panel';
 import { getProductProfitability } from '../api/client';
+import {
+  formatCurrencyExact,
+  formatCurrencyAxis,
+  formatPercent,
+  SERIES,
+  CHART_INK,
+} from '../lib/format';
+import { chartAnim } from '../lib/motion';
+import Figure from '../components/Shared/Figure';
 
-const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+/**
+ * The scatter groups products by margin health. Three colours only: under the
+ * all-pairs test that is all the palette separates safely, and each one is named
+ * in the legend so the meaning never rests on colour alone.
+ */
+const HEALTHY = SERIES[0];
+const THIN = CHART_INK.warn;
+const LOSING = CHART_INK.loss;
+
+/* Most things that stop a page are a column whose meaning was never set, so
+   every error here ends at the one screen that can fix it rather than leaving a
+   person to find it. */
+const FIX_LINK =
+  'font-medium text-ink underline underline-offset-4 hover:no-underline ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
+
+function groupOf(marginPct) {
+  if (marginPct < 0) return { color: LOSING, label: 'Lost money' };
+  if (marginPct < 5) return { color: THIN, label: 'Thin margin' };
+  return { color: HEALTHY, label: 'Earning' };
+}
 
 export default function ProductsPage() {
   const [datasetId, setDatasetId] = useState(null);
@@ -23,27 +53,56 @@ export default function ProductsPage() {
     setError(null);
     getProductProfitability(datasetId)
       .then(setData)
-      .catch((err) => setError(err.response?.data?.detail || 'Failed to load'))
+      .catch((err) => setError(err.response?.data?.detail || 'Could not read this dataset'))
       .finally(() => setLoading(false));
   }, [datasetId]);
 
   return (
     <div>
-      <PageHeader title="Product Profitability" description="Analyze products by revenue, profit, and margin. High sales don't always mean high profit." />
+      <PageHeader
+        title="Products"
+        description="What every product actually earned, not what it sold for. Selling a lot and earning nothing is the thing this page is built to catch."
+      />
       <DatasetSelector selectedId={datasetId} onSelect={setDatasetId} />
 
-      {!datasetId && <Placeholder text="Select a dataset to analyze product profitability." />}
-      {error && <ErrorMsg text={error} />}
-      {loading && <LoadingSpinner message="Analyzing product profitability..." />}
+      {!datasetId && (
+        <Panel title="Nothing to show yet">
+          <p className="max-w-[70ch] text-ink/85">
+            Choose a dataset above and this page ranks every product by what you kept, flags the
+            ones losing money, and shows which of your best sellers are running on a margin too
+            thin to matter.
+          </p>
+        </Panel>
+      )}
+
+      {error && (
+        <div
+          role="alert"
+          className="mb-6 border-l-[3px] border-loss bg-sheet py-3 pr-4 pl-3.5 text-sm text-ink"
+        >
+          <p className="font-medium text-loss">This dataset could not be read</p>
+          <p className="mt-0.5 max-w-[70ch] text-ink/85">{error}</p>
+          <p className="mt-1 max-w-[70ch] text-ink/75">
+            <Link to="/upload" className={FIX_LINK}>
+              Open your files
+            </Link>
+             to check this one's column meanings.
+          </p>
+        </div>
+      )}
+
+      {loading && <LoadingSpinner message="Working out what each product earned" />}
 
       {data && !loading && (
         <>
-          <SummaryCards summary={data.summary} />
-          <ProductTags tags={data.tags} />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <Summary summary={data.summary} />
+          <Tags tags={data.tags} />
+
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
             <MarginScatter scatter={data.scatter} />
-            <TopProductsBar products={data.products.slice(0, 10)} />
+            <TopProducts products={data.products.slice(0, 10)} />
           </div>
+
           <ProductTable products={data.products} />
         </>
       )}
@@ -51,54 +110,63 @@ export default function ProductsPage() {
   );
 }
 
-function SummaryCards({ summary }) {
-  const cards = [
-    { label: 'Total Products', value: summary.total_products },
-    { label: 'Total Revenue', value: `$${summary.total_revenue.toLocaleString()}` },
-    summary.total_profit != null && { label: 'Total Profit', value: `$${summary.total_profit.toLocaleString()}` },
-    summary.avg_margin_pct != null && { label: 'Avg Margin', value: `${summary.avg_margin_pct}%` },
-    summary.loss_making_products != null && { label: 'Loss-Making', value: summary.loss_making_products, warn: summary.loss_making_products > 0 },
+function Summary({ summary }) {
+  const cells = [
+    { label: 'Products', value: summary.total_products, format: 'number' },
+    { label: 'Sold', value: summary.total_revenue, format: 'currency' },
+    summary.total_profit != null && { label: 'Kept', value: summary.total_profit, format: 'currency' },
+    summary.avg_margin_pct != null && {
+      label: 'Margin', value: summary.avg_margin_pct, format: 'percent',
+    },
+    summary.loss_making_products != null && {
+      label: 'Losing money',
+      value: summary.loss_making_products,
+      format: 'number',
+      bad: summary.loss_making_products > 0,
+    },
   ].filter(Boolean);
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-      {cards.map(({ label, value, warn }) => (
-        <div key={label} className={`bg-white border rounded-xl p-3 text-center ${warn ? 'border-red-300' : 'border-gray-200'}`}>
-          <p className="text-xs text-gray-500">{label}</p>
-          <p className={`text-lg font-bold ${warn ? 'text-red-600' : 'text-gray-900'}`}>{value}</p>
+    <div className="paper-feed mb-6 grid grid-cols-2 gap-px border border-kraft bg-kraft md:grid-cols-5">
+      {cells.map(({ label, value, format, bad }) => (
+        <div key={label} className="bg-sheet px-4 py-4">
+          <p className="text-sm text-ink/70">{label}</p>
+          <p className={`mt-1 font-display text-3xl font-bold tabular-nums ${bad ? 'text-loss' : 'text-ink'}`}>
+            <Figure value={value} format={format} />
+          </p>
         </div>
       ))}
     </div>
   );
 }
 
-function ProductTags({ tags }) {
-  const tagConfig = [
-    { key: 'loss_making', label: 'Loss-Making Products', icon: AlertTriangle, color: 'red' },
-    { key: 'high_revenue_low_margin', label: 'High Revenue, Low Margin', icon: TrendingDown, color: 'amber' },
-    { key: 'high_margin', label: 'High Margin (>30%)', icon: TrendingUp, color: 'green' },
-    { key: 'top_sellers', label: 'Top Sellers by Revenue', icon: Award, color: 'blue' },
+function Tags({ tags }) {
+  const groups = [
+    { key: 'loss_making', label: 'Losing money', tone: 'loss' },
+    { key: 'high_revenue_low_margin', label: 'Selling well on a thin margin', tone: 'warn' },
+    { key: 'high_margin', label: 'Earning well, over 30% margin', tone: 'ink' },
+    { key: 'top_sellers', label: 'Biggest sellers by revenue', tone: 'sticker' },
   ];
 
-  const colorMap = {
-    red: 'bg-red-50 border-red-200 text-red-700',
-    amber: 'bg-amber-50 border-amber-200 text-amber-700',
-    green: 'bg-green-50 border-green-200 text-green-700',
-    blue: 'bg-blue-50 border-blue-200 text-blue-700',
-  };
+  const visible = groups.filter((g) => (tags[g.key] || []).length > 0);
+  if (!visible.length) return null;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-      {tagConfig.map(({ key, label, icon: Icon, color }) => {
+    <div className="paper-feed grid grid-cols-1 gap-px border border-kraft bg-kraft md:grid-cols-2" style={{ "--feed-delay": "90ms" }}>
+      {visible.map(({ key, label, tone }) => {
         const items = tags[key] || [];
-        if (items.length === 0) return null;
+        const extra = items.length > 3 ? items.length - 3 : 0;
         return (
-          <div key={key} className={`border rounded-lg p-3 ${colorMap[color]}`}>
-            <div className="flex items-center gap-2 mb-1">
-              <Icon size={14} />
-              <span className="text-sm font-medium">{label}</span>
+          <div key={key} className="bg-sheet px-4 py-3.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Marker tone={tone} />
+              <p className="font-display text-lg font-semibold text-ink">{label}</p>
+              <span className="text-sm text-ink/70 tabular-nums">{items.length}</span>
             </div>
-            <p className="text-xs">{items.slice(0, 3).join(', ')}{items.length > 3 ? ` +${items.length - 3} more` : ''}</p>
+            <p className="mt-1 text-sm text-ink/85">
+              {items.slice(0, 3).join(', ')}
+              {extra > 0 && ` and ${extra} more`}
+            </p>
           </div>
         );
       })}
@@ -106,96 +174,189 @@ function ProductTags({ tags }) {
   );
 }
 
-function MarginScatter({ scatter }) {
-  if (!scatter || scatter.length === 0) return null;
+/** A small swatch that names its own meaning through the label beside it. */
+function Marker({ tone }) {
+  const tones = {
+    loss: 'bg-loss',
+    warn: 'bg-warn',
+    ink: 'bg-ink',
+    sticker: 'bg-sticker border border-ink/25',
+  };
+  return <span className={`h-3 w-3 shrink-0 ${tones[tone]}`} aria-hidden="true" />;
+}
+
+function ChartTooltip({ active, payload, label, rows }) {
+  if (!active || !payload || !payload.length) return null;
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">Revenue vs Profit Margin</h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <ScatterChart margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-          <XAxis type="number" dataKey="revenue" name="Revenue" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-          <YAxis type="number" dataKey="margin_pct" name="Margin %" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-          <Tooltip formatter={(v, name) => [typeof v === 'number' ? (name === 'Revenue' ? `$${v.toLocaleString()}` : `${v}%`) : v, name]} />
-          <Scatter data={scatter} name="Products">
-            {scatter.map((p, i) => (
-              <Cell key={i} fill={p.margin_pct < 0 ? '#ef4444' : p.margin_pct > 30 ? '#22c55e' : '#3b82f6'} />
-            ))}
-          </Scatter>
-        </ScatterChart>
-      </ResponsiveContainer>
+    <div className="border border-kraft bg-sheet px-3 py-2 text-sm text-ink shadow-none">
+      {label != null && <p className="mb-1 font-medium">{label}</p>}
+      {rows(payload).map((r) => (
+        <p key={r.key} className="flex items-baseline justify-between gap-4">
+          <span className="text-ink/70">{r.key}</span>
+          <span className="font-medium tabular-nums">{r.value}</span>
+        </p>
+      ))}
     </div>
   );
 }
 
-function TopProductsBar({ products }) {
+const AXIS_TICK = { fontSize: 11, fill: CHART_INK.label };
+
+function MarginScatter({ scatter }) {
+  if (!scatter || scatter.length === 0) return null;
+
+  const groups = [
+    { label: 'Lost money', color: LOSING },
+    { label: 'Thin margin', color: THIN },
+    { label: 'Earning', color: HEALTHY },
+  ];
+
+  return (
+    <Panel
+      title="What each product sold against what it kept"
+      description="Anything below the zero line cost you money to sell."
+    >
+      <ResponsiveContainer width="100%" height={300}>
+        <ScatterChart margin={{ top: 8, right: 16, bottom: 4, left: 4 }}>
+          <CartesianGrid stroke={CHART_INK.grid} strokeDasharray="3 3" />
+          <XAxis
+            type="number"
+            dataKey="revenue"
+            name="Sold"
+            tick={AXIS_TICK}
+            stroke={CHART_INK.axis}
+            tickFormatter={formatCurrencyAxis}
+          />
+          <YAxis
+            type="number"
+            dataKey="margin_pct"
+            name="Margin"
+            tick={AXIS_TICK}
+            stroke={CHART_INK.axis}
+            tickFormatter={(v) => `${v}%`}
+          />
+          <Tooltip
+            cursor={{ stroke: CHART_INK.axis, strokeDasharray: '3 3' }}
+            content={
+              <ChartTooltip
+                rows={(payload) => {
+                  const p = payload[0]?.payload || {};
+                  return [
+                    { key: 'Product', value: p.product },
+                    { key: 'Sold', value: formatCurrencyExact(p.revenue) },
+                    { key: 'Kept', value: formatCurrencyExact(p.profit) },
+                    { key: 'Margin', value: formatPercent(p.margin_pct) },
+                  ];
+                }}
+              />
+            }
+          />
+          <Scatter data={scatter} name="Products" {...chartAnim()}>
+            {scatter.map((p, i) => (
+              <Cell key={i} fill={groupOf(p.margin_pct).color} />
+            ))}
+          </Scatter>
+        </ScatterChart>
+      </ResponsiveContainer>
+
+      <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
+        {groups.map((g) => (
+          <li key={g.label} className="flex items-center gap-2 text-sm text-ink/85">
+            <span className="h-3 w-3 shrink-0" style={{ backgroundColor: g.color }} aria-hidden="true" />
+            {g.label}
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
+function TopProducts({ products }) {
   const data = products.map((p) => ({
-    name: p.product.length > 25 ? p.product.slice(0, 25) + '...' : p.product,
-    revenue: p.revenue,
-    profit: p.profit || 0,
+    name: p.product.length > 26 ? `${p.product.slice(0, 26)}…` : p.product,
+    sold: p.revenue,
+    kept: p.profit || 0,
   }));
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">Top 10 Products</h3>
+    <Panel title="The ten biggest sellers" description="Sold against kept, for the top ten by revenue.">
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} layout="vertical" margin={{ left: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-          <XAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} />
-          <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} width={140} />
-          <Tooltip formatter={(v) => [`$${v.toLocaleString()}`, undefined]} />
-          <Legend />
-          <Bar dataKey="revenue" fill="#3b82f6" name="Revenue" barSize={10} />
-          <Bar dataKey="profit" fill="#22c55e" name="Profit" barSize={10} />
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 4 }}>
+          <CartesianGrid stroke={CHART_INK.grid} strokeDasharray="3 3" horizontal={false} />
+          <XAxis type="number" tick={AXIS_TICK} stroke={CHART_INK.axis} tickFormatter={formatCurrencyAxis} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: CHART_INK.label }} stroke={CHART_INK.axis} width={172} />
+          <Tooltip
+            cursor={{ fill: 'rgba(46,36,26,0.06)' }}
+            content={
+              <ChartTooltip
+                rows={(payload) =>
+                  payload.map((entry) => ({
+                    key: entry.name,
+                    value: formatCurrencyExact(entry.value),
+                  }))
+                }
+              />
+            }
+          />
+          <Legend wrapperStyle={{ fontSize: 13, color: CHART_INK.label, paddingTop: 8 }} />
+          <Bar dataKey="sold" name="Sold" fill={SERIES[0]} barSize={9} {...chartAnim()} />
+          <Bar dataKey="kept" name="Kept" fill={SERIES[1]} barSize={9} {...chartAnim(120)} />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </Panel>
   );
 }
 
 function ProductTable({ products }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 mt-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">All Products</h3>
+    <Panel
+      title="Every product"
+      description="Sorted by what it sold for. The margin column is where the surprises are."
+      className="mt-6"
+      bodyClassName="p-0"
+    >
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[46rem] text-sm">
+          <caption className="sr-only">
+            Every product with what it sold for, what it kept, its margin, units sold and share of revenue.
+          </caption>
           <thead>
-            <tr className="bg-gray-50">
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Product</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Category</th>
-              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Revenue</th>
-              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Profit</th>
-              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Margin %</th>
-              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Units</th>
-              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Rev Share</th>
+            <tr className="border-b border-kraft text-ink/70">
+              <th scope="col" className="px-4 py-2.5 text-left font-medium">Product</th>
+              <th scope="col" className="px-4 py-2.5 text-left font-medium">Category</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-medium">Sold</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-medium">Kept</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-medium">Margin</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-medium">Units</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-medium">Share</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
-            {products.map((p) => (
-              <tr key={p.product} className="hover:bg-gray-50">
-                <td className="px-3 py-2 text-gray-800 max-w-[200px] truncate">{p.product}</td>
-                <td className="px-3 py-2 text-gray-600 text-xs">{p.category || '-'}</td>
-                <td className="px-3 py-2 text-right text-gray-700">${p.revenue.toLocaleString()}</td>
-                <td className={`px-3 py-2 text-right font-medium ${p.profit != null && p.profit < 0 ? 'text-red-600' : 'text-gray-700'}`}>
-                  {p.profit != null ? `$${p.profit.toLocaleString()}` : '-'}
-                </td>
-                <td className={`px-3 py-2 text-right ${p.margin_pct != null && p.margin_pct < 0 ? 'text-red-600' : p.margin_pct > 30 ? 'text-green-600' : 'text-gray-700'}`}>
-                  {p.margin_pct != null ? `${p.margin_pct}%` : '-'}
-                </td>
-                <td className="px-3 py-2 text-right text-gray-700">{p.units_sold ?? '-'}</td>
-                <td className="px-3 py-2 text-right text-gray-500">{p.revenue_share_pct}%</td>
-              </tr>
-            ))}
+          <tbody>
+            {products.map((p) => {
+              const losing = p.profit != null && p.profit < 0;
+              return (
+                <tr key={p.product} className="border-b border-kraft/60 last:border-b-0">
+                  <td className="max-w-[16rem] truncate px-4 py-2.5 text-ink">{p.product}</td>
+                  <td className="px-4 py-2.5 text-ink/70">{p.category || '—'}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-ink">
+                    {formatCurrencyExact(p.revenue)}
+                  </td>
+                  <td className={`px-4 py-2.5 text-right font-medium tabular-nums ${losing ? 'text-loss' : 'text-ink'}`}>
+                    {p.profit != null ? formatCurrencyExact(p.profit) : '—'}
+                  </td>
+                  <td className={`px-4 py-2.5 text-right tabular-nums ${p.margin_pct != null && p.margin_pct < 0 ? 'text-loss' : 'text-ink'}`}>
+                    {p.margin_pct != null ? formatPercent(p.margin_pct) : '—'}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-ink">{p.units_sold ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-ink/70">
+                    {formatPercent(p.revenue_share_pct)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-    </div>
+    </Panel>
   );
-}
-
-function Placeholder({ text }) {
-  return <div className="bg-white border border-gray-200 rounded-xl p-12 text-center"><p className="text-gray-400 text-sm">{text}</p></div>;
-}
-function ErrorMsg({ text }) {
-  return <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm mb-4">{text}</div>;
 }
