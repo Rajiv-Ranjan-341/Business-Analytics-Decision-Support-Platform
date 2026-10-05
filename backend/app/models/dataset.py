@@ -1,9 +1,21 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
-from sqlalchemy import Column, Integer, String, DateTime, Float, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+
+def utcnow() -> datetime:
+    """The current UTC time, without a tzinfo attached.
+
+    `datetime.utcnow()` is deprecated and scheduled for removal, but its
+    replacement `datetime.now(timezone.utc)` is timezone-aware while the column
+    below is not. Rows written before this change hold naive values, and Python
+    refuses to compare an aware datetime with a naive one, so the offset is
+    dropped here rather than left to raise on the first sort that spans both.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Dataset(Base):
@@ -16,7 +28,7 @@ class Dataset(Base):
     row_count = Column(Integer, default=0)
     column_count = Column(Integer, default=0)
     columns_info = Column(JSON, default=list)
-    upload_date = Column(DateTime, default=datetime.utcnow)
+    upload_date = Column(DateTime, default=utcnow)
     file_size_bytes = Column(Integer, default=0)
 
     column_mappings = relationship(

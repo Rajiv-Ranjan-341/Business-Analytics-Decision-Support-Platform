@@ -79,15 +79,25 @@ def get_explanation(
 
     df = read_uploaded_file(dataset.file_path)
 
-    feature_cols = []
-    for role in ["quantity", "discount", "profit"]:
-        col = mappings.get(role)
-        if col and col in df.columns:
-            feature_cols.append(col)
+    if revenue_col not in df.columns:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"This file has no column called '{revenue_col}'. Its column meanings may "
+                "have been set against an earlier version of the file."
+            ),
+        )
 
-    for role in ["category", "region"]:
+    # Profit is deliberately absent from this list. Profit is revenue minus cost,
+    # so using it to explain revenue restates the target: the model leans on it,
+    # it is crowned the biggest driver, and the answer is a tautology rather than
+    # something a shop owner can act on. Any column mapped to the target itself is
+    # dropped for the same reason, and because a duplicated column makes the
+    # model fail outright.
+    feature_cols = []
+    for role in ["quantity", "discount", "category", "region"]:
         col = mappings.get(role)
-        if col and col in df.columns:
+        if col and col in df.columns and col != revenue_col and col not in feature_cols:
             feature_cols.append(col)
 
     if len(feature_cols) < 2:
@@ -95,7 +105,7 @@ def get_explanation(
             status_code=400,
             detail=(
                 "This page needs at least two other columns to weigh against your sales "
-                "figures, such as quantity, discount, profit, product categories or sales regions."
+                "figures, such as quantity, discount, product categories or sales regions."
             ),
         )
 

@@ -1,13 +1,18 @@
 import { Link } from 'react-router-dom';
 
-// Figures below are computed from backend/data/sample/sample_superstore.csv.
-// If that file changes, these change with it.
+// Every figure below is computed from the Superstore export in
+// backend/data/sample/. The seven biggest sellers by revenue, plus the product
+// that lost the most — which is not among them, and is exactly the sort of
+// thing a sales report buries.
 const LEDGER_LINES = [
-  { item: 'CANON IMAGECLASS 2200 COPIER', sold: '2,999.95', kept: '1,199.98', off: 'NO DISCOUNT' },
-  { item: 'CHROMCRAFT CONFERENCE TABLES', sold: '1,706.18', kept: '85.31', off: '20% OFF' },
-  { item: 'NOVIMEX EXEC LEATHER ARMCHAIR', sold: '1,000.00', kept: '300.00', off: 'NO DISCOUNT' },
-  { item: 'BRETFORD CR4500 SLIM TABLE', sold: '957.58', kept: '-383.03', off: '45% OFF', loss: true },
-  { item: 'CISCO SPA 501G IP PHONE', sold: '911.42', kept: '68.36', off: '20% OFF' },
+  { item: 'CANON IMAGECLASS 2200 COPIER', sold: '61,599.82', kept: '25,199.93', margin: '41%' },
+  { item: 'FELLOWES PB500 PUNCH', sold: '27,453.38', kept: '7,753.04', margin: '28%' },
+  { item: 'CISCO TELEPRESENCE EX90', sold: '22,638.48', kept: '-1,811.08', margin: '-8%', loss: true },
+  { item: 'HON 5400 TASK CHAIRS', sold: '21,870.58', kept: '0.00', margin: '0%', nothing: true },
+  { item: 'GBC DOCUBIND TL300', sold: '19,823.48', kept: '2,233.51', margin: '11%' },
+  { item: 'GBC IBIMASTER 500', sold: '19,024.50', kept: '760.98', margin: '4%' },
+  { item: 'HP LASERJET 3310 COPIER', sold: '18,839.69', kept: '6,983.88', margin: '37%' },
+  { item: 'CUBIFY CUBEX 3D PRINTER', sold: '11,099.96', kept: '-8,879.97', margin: '-80%', loss: true },
 ];
 
 const CAPABILITIES = [
@@ -61,7 +66,7 @@ function Receipt() {
             <div className="text-center">
               <p className="font-bold tracking-[0.2em]">BIZOPTAI</p>
               <p className="mt-1.5 text-[11px] text-ink/70">SAMPLE LEDGER</p>
-              <p className="text-[11px] text-ink/70">30 ORDERS, JAN TO MAR 2024</p>
+              <p className="text-[11px] text-ink/70">5,009 ORDERS, JAN 2014 TO DEC 2017</p>
             </div>
 
             <TearRule />
@@ -78,7 +83,12 @@ function Receipt() {
                   className={
                     line.loss
                       ? '-mx-5 border-l-[3px] border-loss bg-loss/10 py-1.5 pr-5 pl-[17px] text-loss'
-                      : ''
+                      : line.nothing
+                        ? // It did not lose money, so it does not get the red.
+                          // Breaking exactly even is its own kind of bad, and the
+                          // rule stands on the marker rather than on colour.
+                          '-mx-5 border-l-[3px] border-ink py-1.5 pr-5 pl-[17px]'
+                        : ''
                   }
                 >
                   <div className="flex items-baseline justify-between gap-3">
@@ -92,7 +102,7 @@ function Receipt() {
                     }
                   >
                     <span className="tabular-nums">SOLD {line.sold}</span>
-                    <span className="shrink-0">{line.off}</span>
+                    <span className="shrink-0">{line.margin}</span>
                   </div>
                 </li>
               ))}
@@ -102,16 +112,16 @@ function Receipt() {
 
             <div className="flex items-baseline justify-between text-[11px] text-ink/70">
               <span>SOLD</span>
-              <span className="tabular-nums">12,790.23</span>
+              <span className="tabular-nums">2,297,200.86</span>
             </div>
             <div className="mt-1 flex items-baseline justify-between text-[15px] font-bold">
               <span>KEPT</span>
-              <span className="tabular-nums">2,583.50</span>
+              <span className="tabular-nums">286,397.02</span>
             </div>
 
             <TearRule />
 
-            <p className="text-center text-[11px] text-ink/70">1 OF 30 PRODUCTS LOST MONEY</p>
+            <p className="text-center text-[11px] text-ink/70">301 OF 1,850 PRODUCTS LOST MONEY</p>
           </div>
 
           <svg
@@ -153,12 +163,13 @@ export default function LandingPage() {
                   letterSpacing: '-0.015em',
                 }}
               >
-                This shop’s second-best seller made eighty-five dollars.
+                This shop sold twenty-one thousand dollars of chairs and kept none of it.
               </h1>
 
               <p className="mt-7 max-w-[52ch] text-[1.0625rem] leading-[1.6] text-ink/85">
-                It sold $1,706 of conference tables at 20% off and kept $85. The fourth-best seller
-                lost $383. BizOptAI reads your sales file and finds yours.
+                The HON task chairs are the fourth-biggest seller in this file and earned exactly
+                nothing. One place above them, a videoconferencing system sold $22,638 and lost
+                $1,811. BizOptAI reads your sales file and finds yours.
               </p>
 
               <Link
@@ -211,8 +222,8 @@ export default function LandingPage() {
             Find out what your shelf is really earning.
           </h2>
           <p className="mt-5 max-w-[54ch] leading-[1.65] text-paper/80">
-            Upload a CSV or Excel export from whatever till or spreadsheet you already keep. You map
-            your columns once, and every page reads from that mapping.
+            Upload a CSV or Excel export from whatever till or spreadsheet you already keep. It
+            works out what your columns mean, and every page reads from that.
           </p>
           <Link
             to="/upload"
@@ -228,8 +239,8 @@ export default function LandingPage() {
               BizOptAI reads retail sales files and reports what each product actually earns.
             </p>
             <p className="mt-2 max-w-[60ch]">
-              Every figure on this page comes from the thirty-order sample dataset included with the
-              project.
+              Every figure on this page is computed from the Superstore sample file included with
+              the project: 5,009 orders placed between 2014 and 2017.
             </p>
           </div>
         </footer>

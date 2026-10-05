@@ -28,7 +28,7 @@ def forecast_time_series(
     xgb_result = _xgboost_forecast(ts, periods, freq)
     exp_result = _exp_smoothing_forecast(ts, periods, freq)
 
-    best = xgb_result if xgb_result["mape"] <= exp_result["mape"] else exp_result
+    best = _pick_best(xgb_result, exp_result)
 
     historical = []
     for _, row in ts.iterrows():
@@ -58,6 +58,27 @@ def forecast_time_series(
     }
 
 
+def _pick_best(xgb_result: dict, exp_result: dict) -> dict:
+    """Lowest MAPE wins, but only among models that were actually measured.
+
+    A model whose hold-out slice came out empty has no score at all. It cannot
+    win on accuracy, because there is no evidence it is accurate. If neither
+    model could be measured — a history too short to hold anything back — the
+    simpler one is returned, since a single-example gradient boosting fit is the
+    less defensible of the two.
+    """
+    xgb_mape = xgb_result["mape"]
+    exp_mape = exp_result["mape"]
+
+    if xgb_mape is None:
+        # Covers both "only XGBoost went unmeasured" and "neither was measured":
+        # either way exponential smoothing is the one to return.
+        return exp_result
+    if exp_mape is None:
+        return xgb_result
+    return xgb_result if xgb_mape <= exp_mape else exp_result
+
+
 def _xgboost_forecast(ts: pd.DataFrame, periods: int, freq: str) -> dict:
     values = ts["value"].values
     dates = ts["date"].values
@@ -84,8 +105,10 @@ def _xgboost_forecast(ts: pd.DataFrame, periods: int, freq: str) -> dict:
         rmse = round(float(np.sqrt(mean_squared_error(y_test, y_pred))), 2)
         mape = round(float(_mape(y_test, y_pred)), 2)
     else:
-        model.fit(X, y)
-        mae = rmse = mape = 0.0
+        # Nothing was held back, so there is no score. Reporting 0.0 here would
+        # read as a perfect model and — because selection is lowest-MAPE-wins —
+        # would hand the win to whichever model was never measured.
+        mae = rmse = mape = None
 
     model.fit(X, y)
 
@@ -146,7 +169,8 @@ def _exp_smoothing_forecast(ts: pd.DataFrame, periods: int, freq: str) -> dict:
         rmse = round(float(np.sqrt(mean_squared_error(test, preds))), 2)
         mape = round(float(_mape(test, np.array(preds))), 2)
     else:
-        mae = rmse = mape = 0.0
+        # Same reasoning as the XGBoost branch: unmeasured is not perfect.
+        mae = rmse = mape = None
 
     forecast_values = _exp_smooth_predict(values, best_alpha, periods)
     last_date = pd.Timestamp(dates[-1])

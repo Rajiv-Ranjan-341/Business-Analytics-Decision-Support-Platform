@@ -24,6 +24,7 @@ import {
 } from '../lib/format';
 import { runForecast } from '../api/client';
 import { chartAnim } from '../lib/motion';
+import { wasScored } from '../lib/forecast';
 
 // History and forecast are the same measure on the same axis, so they are told
 // apart by stroke, not by scale: history is solid, the projection is dashed and
@@ -45,12 +46,6 @@ const MODEL_NAMES = { xgboost: 'XGBoost', exp_smoothing: 'Exponential smoothing'
 const FIX_LINK =
   'font-medium text-ink underline underline-offset-4 hover:no-underline ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
-
-/** The backend reports 0 across all three metrics when a model had no held-back
- *  slice to score against. Printing that as "0.00" would claim a perfect fit. */
-function wasScored(model) {
-  return !(model.mae === 0 && model.rmse === 0 && model.mape === 0);
-}
 
 function toDate(value) {
   const d = new Date(value);

@@ -43,8 +43,15 @@ function moneyTone(value) {
   return value != null && value < 0 ? 'text-loss' : 'text-ink';
 }
 
-/** A figure inside a sentence: same weight everywhere, always tabular. */
-function Figure({ children }) {
+/**
+ * A figure inside a sentence: same weight everywhere, always tabular.
+ *
+ * Named Stat rather than Figure because components/Shared/Figure.jsx is a
+ * different thing entirely — a value that counts up to itself when data lands.
+ * Two components called Figure doing unrelated jobs is a trap for whoever reads
+ * this next.
+ */
+function Stat({ children }) {
   return <strong className="font-semibold tabular-nums text-ink">{children}</strong>;
 }
 
@@ -165,7 +172,7 @@ function headlineClaims(kpis) {
         {kpis.total_orders != null ? (
           <>
             {' '}
-            across <Figure>{formatNumber(kpis.total_orders)}</Figure> orders
+            across <Stat>{formatNumber(kpis.total_orders)}</Stat> orders
           </>
         ) : null}
         .
@@ -187,7 +194,7 @@ function headlineClaims(kpis) {
         )}
         {kpis.profit_margin != null ? (
           <>
-            , a margin of <Figure>{formatPercent(kpis.profit_margin)}</Figure>.
+            , a margin of <Stat>{formatPercent(kpis.profit_margin)}</Stat>.
           </>
         ) : (
           '.'
@@ -202,7 +209,7 @@ function headlineClaims(kpis) {
         The average order is worth <Money value={kpis.avg_order_value} />
         {kpis.unique_customers != null ? (
           <>
-            , and <Figure>{formatNumber(kpis.unique_customers)}</Figure> customers are behind them.
+            , and <Stat>{formatNumber(kpis.unique_customers)}</Stat> customers are behind them.
           </>
         ) : (
           '.'
@@ -214,7 +221,7 @@ function headlineClaims(kpis) {
   if (kpis.total_units_sold != null) {
     claims.push(
       <Claim key="units" to="/dashboard" source="See Units sold on the dashboard">
-        <Figure>{formatNumber(kpis.total_units_sold)}</Figure> units left the shelf.
+        <Stat>{formatNumber(kpis.total_units_sold)}</Stat> units left the shelf.
       </Claim>
     );
   }
@@ -222,7 +229,7 @@ function headlineClaims(kpis) {
   if (kpis.avg_discount != null) {
     claims.push(
       <Claim key="discount" to="/dashboard" source="See Average discount on the dashboard">
-        Orders carry an average discount of <Figure>{formatPercent(kpis.avg_discount)}</Figure>.
+        Orders carry an average discount of <Stat>{formatPercent(kpis.avg_discount)}</Stat>.
       </Claim>
     );
   }
@@ -232,7 +239,7 @@ function headlineClaims(kpis) {
   if (start && end) {
     claims.push(
       <Claim key="dates" to="/upload" source="See the file on the upload page">
-        Everything above covers <Figure>{start}</Figure> to <Figure>{end}</Figure>.
+        Everything above covers <Stat>{start}</Stat> to <Stat>{end}</Stat>.
       </Claim>
     );
   }
@@ -261,20 +268,20 @@ function LossPanel({ products }) {
       <ClaimList>
         {summary.loss_making_products > 0 ? (
           <Claim key="losers" to="/products" source="See every product and what it keeps">
-            <Figure>{formatNumber(summary.loss_making_products)}</Figure> of{' '}
-            <Figure>{formatNumber(summary.total_products)}</Figure> products lost money.
+            <Stat>{formatNumber(summary.loss_making_products)}</Stat> of{' '}
+            <Stat>{formatNumber(summary.total_products)}</Stat> products lost money.
           </Claim>
         ) : (
           <Claim key="no-losers" to="/products" source="See every product and what it keeps">
-            Not one of your <Figure>{formatNumber(summary.total_products)}</Figure> products lost
+            Not one of your <Stat>{formatNumber(summary.total_products)}</Stat> products lost
             money.
           </Claim>
         )}
 
         {thin.length > 0 && (
           <Claim key="thin" to="/products" source="See every product and what it keeps">
-            <Figure>{formatNumber(thin.length)}</Figure> products sell above the middle of your
-            shelf and still keep under <Figure>5%</Figure> of what they take. Busy shelf space, thin
+            <Stat>{formatNumber(thin.length)}</Stat> products sell above the middle of your
+            shelf and still keep under <Stat>5%</Stat> of what they take. Busy shelf space, thin
             return.
           </Claim>
         )}
@@ -379,8 +386,8 @@ function MovementPanel({ diagnosis, mappings, roleByColumn }) {
     >
       <ClaimList>
         <Claim key="overview" to="/diagnosis" source="See the full breakdown on the diagnosis page">
-          {metricName} {verb} from <Figure>{printMetric(overview.previous_value)}</Figure> in{' '}
-          {previous} to <Figure>{printMetric(overview.current_value)}</Figure> in {current} — a move
+          {metricName} {verb} from <Stat>{printMetric(overview.previous_value)}</Stat> in{' '}
+          {previous} to <Stat>{printMetric(overview.current_value)}</Stat> in {current} — a move
           of{' '}
           <Move value={change} tone={isMoney ? moneyTone(change) : 'text-ink'}>
             {printMetric(change)}
@@ -393,14 +400,14 @@ function MovementPanel({ diagnosis, mappings, roleByColumn }) {
           <Claim key="biggest" to="/diagnosis" source="See the full breakdown on the diagnosis page">
             The single largest piece of that was the{' '}
             {dimensionLabel(biggest.dimension, roleByColumn).toLowerCase()}{' '}
-            <Figure>{biggest.value}</Figure>, which moved{' '}
+            <Stat>{biggest.value}</Stat>, which moved{' '}
             <Move value={biggest.change} tone={isMoney ? moneyTone(biggest.change) : 'text-ink'}>
               {printMetric(biggest.change)}
             </Move>
             {biggestShare ? (
               <>
                 {' '}
-                — <Figure>{biggestShare}</Figure> of the whole difference
+                — <Stat>{biggestShare}</Stat> of the whole difference
               </>
             ) : null}
             .

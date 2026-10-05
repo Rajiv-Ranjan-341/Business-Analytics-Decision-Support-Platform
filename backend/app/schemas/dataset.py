@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ColumnInfo(BaseModel):
@@ -14,6 +14,9 @@ class ColumnInfo(BaseModel):
 
 
 class DatasetSummary(BaseModel):
+    # Read straight off the SQLAlchemy row rather than a dict.
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     original_filename: str
@@ -23,20 +26,16 @@ class DatasetSummary(BaseModel):
     upload_date: datetime
     file_size_bytes: int
 
-    class Config:
-        from_attributes = True
-
 
 class DatasetListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     original_filename: str
     row_count: int
     column_count: int
     upload_date: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ColumnStats(BaseModel):
